@@ -183,6 +183,12 @@ export async function clearHistory(): Promise<void> {
 	await db.clear('history');
 }
 
+export async function fetchIndexFromCDN(slug: string): Promise<DocIndex> {
+	const res = await fetch(`${CDN_BASE}/${slug}/index.json`);
+	if (!res.ok) throw new Error(`Failed to fetch index for ${slug}`);
+	return res.json() as Promise<DocIndex>;
+}
+
 export async function getStorageEstimate(): Promise<{ used: number; quota: number }> {
 	if (navigator.storage?.estimate) {
 		const est = await navigator.storage.estimate();

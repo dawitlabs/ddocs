@@ -175,4 +175,10 @@
 	.footer-link.active {
 		color: var(--color-text);
 	}
+
+	@media (max-width: 767px) {
+		.sidebar {
+			display: none;
+		}
+	}
 </style>
