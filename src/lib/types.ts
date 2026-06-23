@@ -18,6 +18,14 @@ export type DocSetMeta = {
 	links: { home?: string; code?: string };
 };
 
+export type DocGroup = {
+	baseSlug: string;
+	name: string;
+	category: DocCategory;
+	versions: DocSetMeta[];
+	latestVersion: string;
+};
+
 export type DocEntry = {
 	name: string;
 	path: string;

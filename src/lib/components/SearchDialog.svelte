@@ -3,7 +3,7 @@
 	import { searchState } from '$lib/stores/search.svelte.js';
 	import { search as engineSearch } from '$lib/search/engine.js';
 	import { catalog } from '$lib/stores/catalog.svelte.js';
-	import type { SearchResult } from '$lib/types.js';
+	import type { DocGroup, SearchResult } from '$lib/types.js';
 
 	let dialogEl = $state<HTMLDialogElement | null>(null);
 	let inputEl = $state<HTMLInputElement | null>(null);
@@ -12,11 +12,11 @@
 	let selectedIndex = $state(0);
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-	const catalogMatches = $derived.by(() => {
+	const catalogMatches: DocGroup[] = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		if (!q) return [];
-		return catalog.docSets
-			.filter((d) => d.name?.toLowerCase().includes(q) || d.slug.toLowerCase().includes(q))
+		return catalog.groups
+			.filter((g) => g.name.toLowerCase().includes(q) || g.baseSlug.toLowerCase().includes(q))
 			.slice(0, 20);
 	});
 
@@ -73,7 +73,7 @@
 			} else {
 				const ci = selectedIndex - entryResults.length;
 				if (ci < catalogMatches.length) {
-					goto(`/docs/${catalogMatches[ci].slug}`);
+					goto(`/browse/${catalogMatches[ci].baseSlug}`);
 				}
 			}
 			searchState.toggle();
@@ -85,8 +85,8 @@
 		searchState.toggle();
 	}
 
-	function navigateDocSet(slug: string) {
-		goto(`/docs/${slug}`);
+	function navigateGroup(baseSlug: string) {
+		goto(`/browse/${baseSlug}`);
 		searchState.toggle();
 	}
 </script>
@@ -153,19 +153,21 @@
 					{#if entryResults.length > 0}
 						<li class="section-label">Documentation sets</li>
 					{/if}
-					{#each catalogMatches as doc, i}
+					{#each catalogMatches as group, i}
 						{@const idx = entryResults.length + i}
 						<li>
 							<button
 								class="result-item"
 								class:selected={idx === selectedIndex}
-								onclick={() => navigateDocSet(doc.slug)}
+								onclick={() => navigateGroup(group.baseSlug)}
 								onmouseenter={() => { selectedIndex = idx; }}
 							>
-								<span class="result-badge">{doc.category}</span>
-								<span class="result-name">{doc.name}</span>
-								{#if doc.version}
-									<span class="result-type">{doc.version}</span>
+								<span class="result-badge">{group.category}</span>
+								<span class="result-name">{group.name}</span>
+								{#if group.versions.length > 1}
+									<span class="result-type">{group.versions.length} versions</span>
+								{:else if group.latestVersion}
+									<span class="result-type">{group.latestVersion}</span>
 								{/if}
 							</button>
 						</li>

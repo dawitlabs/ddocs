@@ -2,22 +2,21 @@
 	import { catalog } from '$lib/stores/catalog.svelte.js';
 	import { installed } from '$lib/stores/installed.svelte.js';
 	import CategoryChips from '$lib/components/CategoryChips.svelte';
-	import DocCard from '$lib/components/DocCard.svelte';
+	import GroupCard from '$lib/components/GroupCard.svelte';
 	import type { DocCategory } from '$lib/types.js';
 
 	let filterText = $state('');
 	let activeCategory = $state<DocCategory | ''>('');
 
-
 	const filtered = $derived.by(() => {
-		let result = catalog.docSets;
+		let result = catalog.groups;
 		if (activeCategory) {
-			result = result.filter((d) => d.category === activeCategory);
+			result = result.filter((g) => g.category === activeCategory);
 		}
 		if (filterText) {
 			const q = filterText.toLowerCase();
 			result = result.filter(
-				(d) => d.name.toLowerCase().includes(q) || d.type.toLowerCase().includes(q),
+				(g) => g.name.toLowerCase().includes(q) || g.baseSlug.toLowerCase().includes(q),
 			);
 		}
 		return result;
@@ -28,7 +27,7 @@
 	<header class="hero">
 		<h1 class="title">ddocs</h1>
 		<p class="subtitle">
-			{filtered.length} of {catalog.docSets.length} documentation sets, available offline
+			{filtered.length} of {catalog.groups.length} documentation sets, available offline
 		</p>
 	</header>
 
@@ -46,19 +45,19 @@
 
 	<div class="chips-row">
 		<CategoryChips
-			counts={catalog.categoryCounts}
+			counts={catalog.groupCategoryCounts}
 			active={activeCategory}
 			onselect={(cat) => { activeCategory = cat; }}
 		/>
 	</div>
 
 	<div class="grid">
-		{#each filtered as docSet (docSet.slug)}
-			<DocCard {docSet} />
+		{#each filtered as group (group.baseSlug)}
+			<GroupCard {group} />
 		{/each}
 	</div>
 
-	{#if catalog.filtered.length === 0}
+	{#if filtered.length === 0 && (filterText || activeCategory)}
 		<div class="empty">No documentation sets match your filter.</div>
 	{/if}
 </div>
