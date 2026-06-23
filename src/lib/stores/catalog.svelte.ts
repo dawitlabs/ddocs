@@ -15,7 +15,7 @@ class CatalogState {
 		if (this.filter) {
 			const q = this.filter.toLowerCase();
 			result = result.filter(
-				(d) => d.name.toLowerCase().includes(q) || d.type.toLowerCase().includes(q),
+				(d) => d.name?.toLowerCase().includes(q) || d.slug.toLowerCase().includes(q),
 			);
 		}
 

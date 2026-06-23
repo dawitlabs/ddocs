@@ -192,7 +192,7 @@ async function main() {
 	const catalog = raw.map((doc) => ({
 		name: doc.name,
 		slug: doc.slug,
-		type: doc.type,
+		type: doc.type ?? doc.slug,
 		version: doc.version ?? '',
 		release: doc.release ?? '',
 		mtime: doc.mtime,

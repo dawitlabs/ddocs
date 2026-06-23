@@ -1,9 +1,26 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { searchState } from '$lib/stores/search.svelte.js';
+	import { search as engineSearch } from '$lib/search/engine.js';
+	import { catalog } from '$lib/stores/catalog.svelte.js';
+	import type { SearchResult } from '$lib/types.js';
 
 	let dialogEl = $state<HTMLDialogElement | null>(null);
 	let inputEl = $state<HTMLInputElement | null>(null);
+	let query = $state('');
+	let entryResults = $state<SearchResult[]>([]);
+	let selectedIndex = $state(0);
+	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+	const catalogMatches = $derived.by(() => {
+		const q = query.trim().toLowerCase();
+		if (!q) return [];
+		return catalog.docSets
+			.filter((d) => d.name?.toLowerCase().includes(q) || d.slug.toLowerCase().includes(q))
+			.slice(0, 20);
+	});
+
+	const totalCount = $derived(entryResults.length + catalogMatches.length);
 
 	$effect(() => {
 		if (searchState.open) {
@@ -11,28 +28,65 @@
 			requestAnimationFrame(() => inputEl?.focus());
 		} else {
 			dialogEl?.close();
+			query = '';
+			entryResults = [];
+			selectedIndex = 0;
 		}
+	});
+
+	$effect(() => {
+		if (!inputEl) return;
+		const el = inputEl;
+		const poll = setInterval(() => {
+			if (el.value !== query) {
+				query = el.value;
+				selectedIndex = 0;
+			}
+		}, 100);
+		return () => clearInterval(poll);
+	});
+
+	$effect(() => {
+		const q = query.trim();
+		if (debounceTimer) clearTimeout(debounceTimer);
+		if (!q) {
+			entryResults = [];
+			return;
+		}
+		debounceTimer = setTimeout(() => {
+			entryResults = engineSearch(query, { limit: 50 });
+		}, 100);
 	});
 
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'ArrowDown') {
 			e.preventDefault();
-			searchState.moveSelection(1);
+			if (totalCount) selectedIndex = (selectedIndex + 1) % totalCount;
 		} else if (e.key === 'ArrowUp') {
 			e.preventDefault();
-			searchState.moveSelection(-1);
+			if (totalCount) selectedIndex = (selectedIndex - 1 + totalCount) % totalCount;
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
-			const selected = searchState.getSelected();
-			if (selected) {
-				goto(`/docs/${selected.docSlug}/${selected.entryPath}`);
-				searchState.toggle();
+			if (selectedIndex < entryResults.length) {
+				const r = entryResults[selectedIndex];
+				goto(`/docs/${r.docSlug}/${r.entryPath}`);
+			} else {
+				const ci = selectedIndex - entryResults.length;
+				if (ci < catalogMatches.length) {
+					goto(`/docs/${catalogMatches[ci].slug}`);
+				}
 			}
+			searchState.toggle();
 		}
 	}
 
-	function navigate(docSlug: string, entryPath: string) {
+	function navigateEntry(docSlug: string, entryPath: string) {
 		goto(`/docs/${docSlug}/${entryPath}`);
+		searchState.toggle();
+	}
+
+	function navigateDocSet(slug: string) {
+		goto(`/docs/${slug}`);
 		searchState.toggle();
 	}
 </script>
@@ -59,13 +113,12 @@
 				<circle cx="11" cy="11" r="8" />
 				<path d="m21 21-4.3-4.3" />
 			</svg>
-			<input
+				<input
 				bind:this={inputEl}
+				bind:value={query}
 				type="text"
 				class="search-input"
 				placeholder="Search documentation..."
-				value={searchState.query}
-				oninput={(e) => searchState.setQuery(e.currentTarget.value)}
 				onkeydown={handleKeydown}
 			/>
 			<button class="search-close" onclick={() => searchState.toggle()}>
@@ -73,26 +126,53 @@
 			</button>
 		</div>
 
-		{#if searchState.results.length > 0}
+		{#if totalCount > 0}
 			<ul class="search-results">
-				{#each searchState.results as result, i}
-					<li>
-						<button
-							class="result-item"
-							class:selected={i === searchState.selectedIndex}
-							onclick={() => navigate(result.docSlug, result.entryPath)}
-							onmouseenter={() => { searchState.selectedIndex = i; }}
-						>
-							<span class="result-badge">{result.docName}</span>
-							<span class="result-name">{result.entryName}</span>
-							{#if result.entryType}
-								<span class="result-type">{result.entryType}</span>
-							{/if}
-						</button>
-					</li>
-				{/each}
+				{#if entryResults.length > 0}
+					{#if catalogMatches.length > 0}
+						<li class="section-label">Entries</li>
+					{/if}
+					{#each entryResults as result, i}
+						<li>
+							<button
+								class="result-item"
+								class:selected={i === selectedIndex}
+								onclick={() => navigateEntry(result.docSlug, result.entryPath)}
+								onmouseenter={() => { selectedIndex = i; }}
+							>
+								<span class="result-badge">{result.docName}</span>
+								<span class="result-name">{result.entryName}</span>
+								{#if result.entryType}
+									<span class="result-type">{result.entryType}</span>
+								{/if}
+							</button>
+						</li>
+					{/each}
+				{/if}
+				{#if catalogMatches.length > 0}
+					{#if entryResults.length > 0}
+						<li class="section-label">Documentation sets</li>
+					{/if}
+					{#each catalogMatches as doc, i}
+						{@const idx = entryResults.length + i}
+						<li>
+							<button
+								class="result-item"
+								class:selected={idx === selectedIndex}
+								onclick={() => navigateDocSet(doc.slug)}
+								onmouseenter={() => { selectedIndex = idx; }}
+							>
+								<span class="result-badge">{doc.category}</span>
+								<span class="result-name">{doc.name}</span>
+								{#if doc.version}
+									<span class="result-type">{doc.version}</span>
+								{/if}
+							</button>
+						</li>
+					{/each}
+				{/if}
 			</ul>
-		{:else if searchState.query.trim()}
+		{:else if query.trim()}
 			<div class="no-results">No results found</div>
 		{/if}
 	</div>
@@ -224,6 +304,15 @@
 		flex-shrink: 0;
 		font-size: 0.75rem;
 		color: var(--color-text-dim);
+	}
+
+	.section-label {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-dim);
+		padding: 10px 10px 4px;
 	}
 
 	.no-results {
